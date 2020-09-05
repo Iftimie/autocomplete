@@ -2,22 +2,16 @@
 
 Inspired from [here](https://lopespm.github.io/2020/08/03/implementation-autocomplete-system-design.html)
 
-Most basic start. There are routes for:
-- static files
-- search
-- top-phrases
-- index
+This improved version has the original the main.py split into 3 parts:
+- gateway
+  - contains the html, css and javascript files
+- assembler/colletor
+  - collects new phrases and immediately constructs the trie every time (still inefficient)
+- distributor/backend
+  - generates results based on prefix (still loads the trie from disk everytime)
 
-To run the project, run the following commands:
+The 3 components are organized into docker containers.
 
-`sudo pip3 install -r requirements.txt`
+To start the project run:
 
-Then start the application with:
-
-`sudo gunicorn3 -b 0.0.0.0:80 main:app --reload`
-
-This initial implementation is simple stupid. Everything is grouped into a monolith and it is very inneficient and unreliable.
-
-Every time a top-phrases is requested, the app reads the trie from disk, and then computes the results for a prefix.
-
-Every time a search is requested, the app constructs a new trie and saves it to disk.
+`sudo docker-compose up`
