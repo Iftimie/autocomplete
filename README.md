@@ -2,13 +2,9 @@
 
 Inspired from [here](https://lopespm.github.io/2020/08/03/implementation-autocomplete-system-design.html)
 
-This newer version simply has a new service (assembler.triebuilder) that builds the trie when it is commanded to.
-
-The command to build the trie comes from assembler.collector when a new phrase is part of a new 30 minute sliding window.
-It will make a request to the triebuilder /build_trie endpoint.
-
-The triebuilder will receive the name of the previous sliding window, but for no special reason it will rebuild the tree
-from all available files. 
+In this newer version, the distributor backend lists the shared directory during each requests to see if there are new
+ tries. It will load the new trie only if there is a new file. Each file is named after the timestamp of its creation.
+ The directory listing is still inefficient, but better than loading the file every time.
 
 To start the project run:
 

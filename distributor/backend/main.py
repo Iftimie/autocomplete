@@ -9,18 +9,21 @@ from trie import Trie
 class Backend:
     def __init__(self):
         self._logger = logging.getLogger('gunicorn.error')
+        self.trie = None
+        self.trie_file = None
 
     def top_phrases_for_prefix(self, prefix):
-        trie = self._load_trie()
+        self._load_trie()
         return trie.top_phrases_for_prefix(prefix)
 
     def _load_trie(self):
-        trie_local_file_name = "/app/distributor/backend/shared_data/trie.dat"
-        if os.path.exists(trie_local_file_name):
-            trie = pickle.load( open(trie_local_file_name, "rb"))
+        shared_path = "/app/distributor/backend/shared_data"
+        trie_files = sorted(os.listdir(shared_path))
+        if trie_files and trie_files[-1]!=self.trie_file:
+            self.trie = pickle.load( open(os.path.join(shared_path, trie_files[-1]), "rb"))
+            self.trie_file = trie_files[-1]
         else:
-            trie = Trie()
-        return trie
+            self.trie = Trie()
         
 
 class TopPhrasesResource(object):

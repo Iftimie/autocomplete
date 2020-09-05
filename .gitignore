@@ -4,3 +4,4 @@ shared/shared_data/trie.dat
 .idea
 __pycache__
 shared/shared_phrases/
+*.dat

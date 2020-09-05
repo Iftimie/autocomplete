@@ -23,7 +23,7 @@ class BuildTrie(object):
                 with open(fullpath, 'r') as f:
                     for line in f:
                         trie.add_phrase(line)
-            trie_local_file_name = "/app/assembler/triebuilder/shared_data/trie.dat"
+            trie_local_file_name = f"/app/assembler/triebuilder/shared_data/trie_{phrase_file}.dat"
             pickle.dump(trie, open(trie_local_file_name, "wb"))
 
             response_body = json.dumps(
