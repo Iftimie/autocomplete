@@ -1,21 +1,29 @@
-from trie import Trie
-import pickle
 import logging
+import os
 import falcon
 import json
+import time
+import requests
 
 
 class Collector(object):
 
     def collect_phrase(self, phrase):
-        with open("phrases.txt", 'a') as f:
+        shared_path = "/app/assembler/collector/shared_phrases"
+        sorted_files = sorted(os.listdir(shared_path))
+        current_time = time.time()
+        seconds_30 = 30
+        if not sorted_files:
+            curfile = str(int(current_time))
+        elif int(sorted_files[-1])+seconds_30 < current_time:
+            curfile = str(int(current_time))
+            requests.post(f"http://assembler.triebuilder:4000/build_trie?phrase_file={int(sorted_files[-1])}")
+        else:       
+            curfile = sorted_files[-1]
+        fullpath = os.path.join(shared_path, curfile)
+
+        with open(fullpath, 'a') as f:
             f.write(phrase+'\n')
-        trie = Trie()
-        with open("phrases.txt", 'r') as f:
-            for line in f:
-                trie.add_phrase(line)
-        trie_local_file_name = "/app/assembler/collector/shared_data/trie.dat"
-        pickle.dump(trie, open(trie_local_file_name, "wb"))
 
 
 class SearchResource(object):

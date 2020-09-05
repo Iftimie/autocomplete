@@ -33,5 +33,16 @@ services:
     volumes:
       - ./assembler/collector/main.py:/app/assembler/collector/main.py
       - ./shared/trie.py:/app/assembler/collector/trie.py
-      - ./shared/shared_data:/app/assembler/collector/shared_data
+      - ./shared/shared_phrases:/app/assembler/collector/shared_phrases
     command: gunicorn --chdir /app/assembler/collector main:app -b 0.0.0.0:5000 --reload
+  
+  assembler.triebuilder:
+    build: ./assembler/triebuilder
+    ports:
+      - "4000"
+    volumes:
+      - ./assembler/triebuilder/main.py:/app/assembler/triebuilder/main.py
+      - ./shared/trie.py:/app/assembler/triebuilder/trie.py
+      - ./shared/shared_data:/app/assembler/triebuilder/shared_data
+      - ./shared/shared_phrases:/app/assembler/triebuilder/shared_phrases
+    command: gunicorn --chdir /app/assembler/triebuilder main:app -b 0.0.0.0:4000 --reload

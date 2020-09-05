@@ -3,3 +3,4 @@ shared/shared_data/trie.dat
 *.log
 .idea
 __pycache__
+shared/shared_phrases/

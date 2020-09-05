@@ -52,7 +52,6 @@ class TopPhrasesResource(object):
             resp.status = falcon.HTTP_500
             resp.body = response_body
 
-
 app = falcon.API()
 app.add_route('/top-phrases', TopPhrasesResource())
 
