@@ -1,8 +1,0 @@
-{
-   "namespace": "io.github.lopespm.autocomplete.phrases",
-   "name": "value",
-   "type": "record",
-   "fields" : [
-     { "name" : "phrase", "type" : "string" }
-   ]
-}
