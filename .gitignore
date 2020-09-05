@@ -5,3 +5,5 @@ shared/shared_data/trie.dat
 __pycache__
 shared/shared_phrases/
 *.dat
+shared/shared_data/
+gateway/log/

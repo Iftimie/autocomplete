@@ -4,6 +4,7 @@ import logging
 import os
 import falcon
 import json
+import requests
 
 
 class BuildTrie(object):
@@ -25,6 +26,8 @@ class BuildTrie(object):
                         trie.add_phrase(line)
             trie_local_file_name = f"/app/assembler/triebuilder/shared_data/trie_{phrase_file}.dat"
             pickle.dump(trie, open(trie_local_file_name, "wb"))
+
+            requests.post(f"http://distributor.backend:6000/reload-trie?trie_file=trie_{phrase_file}.dat")
 
             response_body = json.dumps(
                 {

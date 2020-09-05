@@ -9,27 +9,20 @@ from trie import Trie
 class Backend:
     def __init__(self):
         self._logger = logging.getLogger('gunicorn.error')
-        self.trie = None
-        self.trie_file = None
+        self.trie = Trie()
 
     def top_phrases_for_prefix(self, prefix):
-        self._load_trie()
-        return trie.top_phrases_for_prefix(prefix)
+        return self.trie.top_phrases_for_prefix(prefix)
 
-    def _load_trie(self):
+    def _load_trie(self, trie_file):
         shared_path = "/app/distributor/backend/shared_data"
-        trie_files = sorted(os.listdir(shared_path))
-        if trie_files and trie_files[-1]!=self.trie_file:
-            self.trie = pickle.load( open(os.path.join(shared_path, trie_files[-1]), "rb"))
-            self.trie_file = trie_files[-1]
-        else:
-            self.trie = Trie()
-        
+        self.trie = pickle.load( open(os.path.join(shared_path, trie_file), "rb"))
+
 
 class TopPhrasesResource(object):
-    def __init__(self):
+    def __init__(self, backend):
         self._logger = logging.getLogger('gunicorn.error')
-        self._backend = Backend()
+        self._backend = backend
 
     def on_get(self, req, resp):
         self._logger.debug(f'Handling {req.method} request {req.url} with params {req.params}')
@@ -55,6 +48,41 @@ class TopPhrasesResource(object):
             resp.status = falcon.HTTP_500
             resp.body = response_body
 
+
+class ReloadTrieResource(object):
+    def __init__(self, backend):
+        self._logger = logging.getLogger('gunicorn.error')
+        self._backend = backend
+
+    def on_post(self, req, resp):
+        self._logger.debug(f'Handling {req.method} request {req.url} with params {req.params}')
+        try:
+            trie_file = req.params['trie_file']
+            self._backend._load_trie(trie_file)
+            response_body = json.dumps(
+                {
+                    "status": "success",
+                    })
+            resp.status = falcon.HTTP_200
+            resp.body = response_body
+
+        except Exception as e:
+            self._logger.error('An error occurred when processing the request', exc_info=e)
+            response_body = json.dumps(
+                {
+                    "status": "error",
+                    "message": "An error occurred when processing the request"
+                    })
+            resp.status = falcon.HTTP_500
+            resp.body = response_body
+
+
 app = falcon.API()
-app.add_route('/top-phrases', TopPhrasesResource())
+common_backend = Backend()
+top_phrases_resource = TopPhrasesResource(common_backend)
+app.add_route('/top-phrases', top_phrases_resource)
+
+reload_trie_resource = ReloadTrieResource(common_backend)
+app.add_route('/reload-trie', reload_trie_resource)
+
 
