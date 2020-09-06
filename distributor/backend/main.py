@@ -5,14 +5,25 @@ import os
 import pickle
 from trie import Trie
 from kazoo.client import KazooClient, DataWatch
+from hdfs import InsecureClient
 
 ZK_NEXT_TARGET = '/phrases/distributor/next_target'
+
+
+class HdfsClient:
+    def __init__(self, namenode_host):
+        self._client = InsecureClient(f'http://{namenode_host}:9870')
+
+    def download(self, remote_hdfs_path, local_path):
+        self._client.download(remote_hdfs_path, local_path, overwrite=True)
+
 
 class Backend:
     def __init__(self):
         self._logger = logging.getLogger('gunicorn.error')
         self._trie = Trie()
         self._zk = KazooClient(hosts=f'{os.getenv("ZOOKEEPER_HOST")}:2181')
+        self._hdfsClient = HdfsClient(os.getenv("HADOOP_NAMENODE_HOST"))
 
     def start(self):
         self._zk.start()
@@ -20,7 +31,7 @@ class Backend:
 
     def _on_next_target_changed(self, data, stat, event=None):
         self._logger.info("_on_next_target_changed Data is %s" % data)
-        if (data is None or data==b''):
+        if (data is None or data == b''):
             return
         next_target_id = data.decode()
         self._load_trie(next_target_id)
@@ -32,12 +43,10 @@ class Backend:
         return self._trie.top_phrases_for_prefix(prefix)
 
     def _load_trie(self, target_id):
-        shared_path = "/app/distributor/backend/shared_tries"
-        trie_path = os.path.join(shared_path, f"trie_{target_id}.dat")
-        if os.path.exists(trie_path):
-            self._trie = pickle.load(open(trie_path,'rb'))
-        else:
-            self._logger.warning(f"File does not exist {trie_path}")
+        local_path = 'trie.dat'
+        trie_hdfs_path = f'/phrases/3_tries/{target_id}/trie.dat'
+        self._hdfsClient.download(trie_hdfs_path, local_path)
+        self._trie = pickle.load( open(local_path, "rb"))
 
 
 class TopPhrasesResource(object):
@@ -69,6 +78,7 @@ class TopPhrasesResource(object):
                     })
             resp.status = falcon.HTTP_500
             resp.body = response_body
+
 
 app = falcon.API()
 app.add_route('/top-phrases', TopPhrasesResource())

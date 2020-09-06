@@ -1,2 +1,4 @@
 kazoo
 requests
+hdfs
+fastavro

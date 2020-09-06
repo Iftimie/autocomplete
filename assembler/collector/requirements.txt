@@ -1,2 +1,5 @@
 falcon
 gunicorn
+requests
+confluent-kafka
+

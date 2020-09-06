@@ -3,15 +3,16 @@
 MAX_NUMBER_OF_INPUT_FILES="3"
 TARGET_ID=$(date +%Y%m%d_%H%M)
 
-SOURCE=/app/assembler/tasks/shared_phrases/
-INPUT_FILES=`ls -1 ${SOURCE} | sort -r | head -${MAX_NUMBER_OF_INPUT_FILES}`
+# Wait for phrases
+echo "Checking if /phrases/1_sink/phrases/ exists.."
+while ! $(hadoop fs -test -d "/phrases/1_sink/phrases/") ; do echo "Waiting for folder /phrases/1_sink/phrases/ to be created by kafka connect. Please wait.."; done
+echo "Checking for contents in /phrases/1_sink/phrases/.."
+while [[ $(hadoop fs -ls /phrases/1_sink/phrases/ | sed 1,1d) == "" ]] ; do echo "Waiting for kafka connect to populate /phrases/1_sink/phrases/*. Please wait.."; done
 
-DESTINATION=/app/assembler/tasks/shared_targets/${TARGET_ID}
-
-[ ! -d ${DESTINATION} ] && (mkdir ${DESTINATION};)
-
-for input_file in ${INPUT_FILES} ; do
-    cp ${SOURCE}${input_file} ${DESTINATION}/${input_file}
+hadoop fs -mkdir -p /phrases/2_targets/${TARGET_ID}/
+INPUT_FOLDERS=`hadoop fs -ls /phrases/1_sink/phrases/ | sed 1,1d | sort -r -k8 | awk '{print \$8}' | head -${MAX_NUMBER_OF_INPUT_FOLDERS} | sort`
+for input_folder in ${INPUT_FOLDERS} ; do
+    hdfs dfs -cp ${input_folder} /phrases/2_targets/${TARGET_ID}/ ;
 done
 
 cd /zookeeper/bin
