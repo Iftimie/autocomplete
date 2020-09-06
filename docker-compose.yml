@@ -18,12 +18,16 @@ services:
 
   distributor.backend:
     build: ./distributor/backend
+    depends_on:
+      - zookeeper
+    environment:
+      - ZOOKEEPER_HOST=zookeeper
     ports:
       - "6000:6000"
     volumes:
       - ./distributor/backend/main.py:/app/distributor/backend/main.py
       - ./shared/trie.py:/app/distributor/backend/trie.py
-      - ./shared/shared_data:/app/distributor/backend/shared_data
+      - ./shared/shared_tries:/app/distributor/backend/shared_tries
     command: gunicorn --chdir /app/distributor/backend main:app -b 0.0.0.0:6000 --reload
 
   assembler.collector:
@@ -38,11 +42,23 @@ services:
   
   assembler.triebuilder:
     build: ./assembler/triebuilder
-    ports:
-      - "4000"
+    environment:
+      - ZOOKEEPER_HOST=zookeeper
+    depends_on:
+      - zookeeper
     volumes:
       - ./assembler/triebuilder/main.py:/app/assembler/triebuilder/main.py
       - ./shared/trie.py:/app/assembler/triebuilder/trie.py
-      - ./shared/shared_data:/app/assembler/triebuilder/shared_data
-      - ./shared/shared_phrases:/app/assembler/triebuilder/shared_phrases
-    command: gunicorn --chdir /app/assembler/triebuilder main:app -b 0.0.0.0:4000 --reload
+      - ./shared/shared_targets:/app/assembler/triebuilder/shared_targets
+      - ./shared/shared_tries:/app/assembler/triebuilder/shared_tries
+    command: python /app/assembler/triebuilder/main.py
+  
+  zookeeper:
+    image: wurstmeister/zookeeper:latest
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000

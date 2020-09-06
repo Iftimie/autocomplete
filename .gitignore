@@ -7,3 +7,5 @@ shared/shared_phrases/
 *.dat
 shared/shared_data/
 gateway/log/
+shared/shared_targets/
+shared/shared_tries/

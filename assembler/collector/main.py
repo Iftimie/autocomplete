@@ -3,23 +3,15 @@ import os
 import falcon
 import json
 import time
-import requests
 
 
 class Collector(object):
 
     def collect_phrase(self, phrase):
         shared_path = "/app/assembler/collector/shared_phrases"
-        sorted_files = sorted(os.listdir(shared_path))
-        current_time = time.time()
+        current_time = int(time.time())
         seconds_30 = 30
-        if not sorted_files:
-            curfile = str(int(current_time))
-        elif int(sorted_files[-1])+seconds_30 < current_time:
-            curfile = str(int(current_time))
-            requests.post(f"http://assembler.triebuilder:4000/build_trie?phrase_file={int(sorted_files[-1])}")
-        else:       
-            curfile = sorted_files[-1]
+        curfile = str(current_time-current_time%seconds_30)
         fullpath = os.path.join(shared_path, curfile)
 
         with open(fullpath, 'a') as f:

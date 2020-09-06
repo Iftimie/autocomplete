@@ -2,16 +2,28 @@
 
 Inspired from [here](https://lopespm.github.io/2020/08/03/implementation-autocomplete-system-design.html)
 
-One way to solve the previous problem, when the distributor was listing the directory every time, is to send a post 
-request from the triebuilder to distributor/backend to reload the trie.
+The previous version was communicating information by defining http endpoints. In this version, the commmunication of 
+events such as trie loading is done by using Zookeeper. 
 
-Thus the information flow so far is:
-- collect-phrase in assembler collector
-- newphrase is appended to its current sliding window
-  - if newphrase is in a new sliding window then:
-     - request is sent to triebuilder to build the trie that includes the previous sliding window
-     - after triebuilder builds the new trie, a request is sent to distributor.backend to load the new trie
+Another change is that the signalling from assembler.collector to assembler.triebuilder was removed. The job of building
+a trie is triggered by the script tasks/do_tasks.sh as in the [original implementation](https://lopespm.github.io/2020/08/03/implementation-autocomplete-system-design.html). 
+This change will also come in handy when the message broker will be introduced.
+
+The script looks at the last 3 files that contain phrases, creates a new directory, copies the files in the new directory
+and runs  Zookeeper CLI in order to notify the assembler.triebuilder. It is important to mention that the triebuilder is no longer
+a service defined with falcon API.
+
+After the trie is built, assembler.triebuilder the distributor.backend that it should reload the trie. 
+The notification is done again with Zookeeper.
 
 To start the project run:
 
-`sudo docker-compose up`
+`make run`
+
+In a new terminal run:
+
+`make setup`
+
+After a few phrases have been introduced and a few files can be seen in shared/shared_phrases, run:
+
+`make do_tasks`

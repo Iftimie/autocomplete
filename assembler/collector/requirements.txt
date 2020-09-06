@@ -1,3 +1,2 @@
 falcon
 gunicorn
-requests
