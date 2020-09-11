@@ -6,10 +6,16 @@ import pickle
 from trie import Trie
 from kazoo.client import KazooClient, DataWatch
 from hdfs import InsecureClient
+from docker import Client  # to find the scaled container ID
+import os
+import socket
+
 
 ZK_NEXT_TARGET = '/phrases/distributor/next_target'
 min_lexicographic_char = chr(0)
 max_lexicographic_char = chr(255)
+HOSTNAME = os.environ.get("HOSTNAME")
+NUMBER_NODES_PER_PARTITION = 1
 
 
 class HdfsClient:
@@ -23,10 +29,18 @@ class HdfsClient:
 class Backend:
     def __init__(self):
         self._logger = logging.getLogger('gunicorn.error')
-        self._tries = [(Trie(), min_lexicographic_char, max_lexicographic_char)]
+        self._trie = Trie()
         self._zk = KazooClient(hosts=f'{os.getenv("ZOOKEEPER_HOST")}:2181')
         self._hdfsClient = HdfsClient(os.getenv("HADOOP_NAMENODE_HOST"))
+        self.partition_index = self.find_self_partition()
 
+    def find_self_partition(self):
+        cli = Client(base_url='unix://var/run/docker.sock')
+        all_containers = cli.containers()
+        # filter out ourself by HOSTNAME
+        our_container = [c for c in all_containers if c['Id'][:12] == HOSTNAME[:12]][0]
+        return int(our_container['Names'][0].split('_')[-1]) - 1
+        
 
     def start(self):
         self._zk.start()
@@ -38,24 +52,26 @@ class Backend:
             return
         next_target_id = data.decode()
 
-        partitions = self._zk.get_children(f'/phrases/distributor/{next_target_id}/partitions')
-        self._tries = []
-        for partition in partitions:
-            trie_data_hdfs_path = f'/phrases/distributor/{next_target_id}/partitions/{partition}/trie_data_hdfs_path'
-            trie = self._load_trie(self._zk.get(trie_data_hdfs_path)[0].decode())
-            start, end = partition.split('|')
-            if not start: start = min_lexicographic_char
-            if not end: end = max_lexicographic_char
-            self._tries.append((trie, start, end))
+        next_target_id = self._zk.get(ZK_NEXT_TARGET)[0].decode()
+        self._attempt_to_join_target(next_target_id)
 
+    def _attempt_to_join_target(self, target_id):
+        if (not target_id or self._zk.exists(f'/phrases/distributor/{target_id}') is None):
+            return
+        partitions = self._zk.get_children(f'/phrases/distributor/{target_id}/partitions')
+        partition = partitions[self.partition_index]
+
+        node_path = f'/phrases/distributor/{target_id}/partitions/{partition}'
+        self._zk.set(node_path, socket.gethostname().encode())
+
+        trie_data_hdfs_path = f'/phrases/distributor/{target_id}/partitions/{partition}/trie_data_hdfs_path'
+        self._trie = self._load_trie(self._zk.get(trie_data_hdfs_path)[0].decode())
 
     def stop(self):
         self._zk.stop()
 
     def top_phrases_for_prefix(self, prefix):
-        for trie, start, end in self._tries:
-            if start <= prefix < end:
-                return trie.top_phrases_for_prefix(prefix)
+        return self._trie.top_phrases_for_prefix(prefix)
 
     def _load_trie(self, trie_hdfs_path):
         local_path = 'trie.dat'

@@ -2,9 +2,9 @@ DOCKER_NETWORK = autocomplete_default
 ENV_FILE = assembler/hadoop/hadoop.env
 
 run:
-	sudo docker-compose up
+	sudo docker-compose up --scale distributor.backend=2
+	# we have only two partitions. we start one distributor.backend for each partition
 
-# https://stackoverflow.com/questions/25311613/docker-mounting-volumes-on-host
 do_tasks:
 	sudo docker build -t lopespm/tasks ./assembler/tasks
 	sudo docker run \
