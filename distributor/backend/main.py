@@ -8,6 +8,8 @@ from kazoo.client import KazooClient, DataWatch
 from hdfs import InsecureClient
 
 ZK_NEXT_TARGET = '/phrases/distributor/next_target'
+min_lexicographic_char = chr(0)
+max_lexicographic_char = chr(255)
 
 
 class HdfsClient:
@@ -21,9 +23,10 @@ class HdfsClient:
 class Backend:
     def __init__(self):
         self._logger = logging.getLogger('gunicorn.error')
-        self._trie = Trie()
+        self._tries = [(Trie(), min_lexicographic_char, max_lexicographic_char)]
         self._zk = KazooClient(hosts=f'{os.getenv("ZOOKEEPER_HOST")}:2181')
         self._hdfsClient = HdfsClient(os.getenv("HADOOP_NAMENODE_HOST"))
+
 
     def start(self):
         self._zk.start()
@@ -34,20 +37,30 @@ class Backend:
         if (data is None or data == b''):
             return
         next_target_id = data.decode()
-        self._load_trie(next_target_id)
+
+        partitions = self._zk.get_children(f'/phrases/distributor/{next_target_id}/partitions')
+        self._tries = []
+        for partition in partitions:
+            trie_data_hdfs_path = f'/phrases/distributor/{next_target_id}/partitions/{partition}/trie_data_hdfs_path'
+            trie = self._load_trie(self._zk.get(trie_data_hdfs_path)[0].decode())
+            start, end = partition.split('|')
+            if not start: start = min_lexicographic_char
+            if not end: end = max_lexicographic_char
+            self._tries.append((trie, start, end))
+
 
     def stop(self):
         self._zk.stop()
 
     def top_phrases_for_prefix(self, prefix):
-        return self._trie.top_phrases_for_prefix(prefix)
+        for trie, start, end in self._tries:
+            if start <= prefix < end:
+                return trie.top_phrases_for_prefix(prefix)
 
-    def _load_trie(self, target_id):
+    def _load_trie(self, trie_hdfs_path):
         local_path = 'trie.dat'
-        trie_hdfs_path = f'/phrases/3_tries/{target_id}/trie.dat'
         self._hdfsClient.download(trie_hdfs_path, local_path)
-        self._trie = pickle.load( open(local_path, "rb"))
-
+        return pickle.load( open(local_path, "rb"))
 
 class TopPhrasesResource(object):
     def __init__(self):

@@ -19,13 +19,13 @@ setup:
 	    sleep 2 ; \
 	done
 
-	docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases ""
-	docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/assembler ""
-	docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/assembler/last_built_target ""
+	sudo docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases ""
+	sudo docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/assembler ""
+	sudo docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/assembler/last_built_target ""
 
-	docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/distributor ""
-	docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/distributor/current_target ""
-	docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/distributor/next_target ""
+	sudo docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/distributor ""
+	sudo docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/distributor/current_target ""
+	sudo docker exec zookeeper ./bin/zkCli.sh -server localhost:2181 create /phrases/distributor/next_target ""
 
 populate_search:
 	echo "Populating search phrases to the collector"
@@ -65,3 +65,7 @@ populate_search:
 	curl -X POST -G http://localhost/search --data-urlencode "phrase=youtube music"
 	curl -X POST -G http://localhost/search --data-urlencode "phrase=zookeeper"
 	curl -X POST -G http://localhost/search --data-urlencode "phrase=zk"
+
+list:
+	@grep '^[^#[:space:]].*:' Makefile
+

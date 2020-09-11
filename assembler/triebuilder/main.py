@@ -2,12 +2,17 @@ from trie import Trie
 import pickle
 import logging
 import os
+import json
 import time
 import requests
 from kazoo.client import KazooClient, DataWatch
 from hdfs import InsecureClient
 from hdfs.ext.avro import AvroReader
+import shutil
 
+min_lexicographic_char = chr(0)
+max_lexicographic_char = chr(255)
+PARTITIONS = (min_lexicographic_char, 'mod'), ('mod', max_lexicographic_char)
 ZK_ASSEMBLER_LAST_BUILT_TARGET = '/phrases/assembler/last_built_target'
 ZK_NEXT_TARGET = '/phrases/distributor/next_target'
 
@@ -90,23 +95,26 @@ class TrieBuilder:
         if not target_id or self._is_already_built(target_id):
             return False
 
-        try:
-            trie = self._create_trie(target_id)
+        for start, end in PARTITIONS:
+            trie = self._create_trie(target_id, start, end)
 
             trie_local_file_name = "trie.dat"
             pickle.dump(trie, open(trie_local_file_name, "wb"))
 
-            trie_remote_hdfs_path = self._get_trie_remote_hdfs_path(target_id)
+            trie_remote_hdfs_path = self._get_trie_remote_hdfs_path(target_id, start, end)
             self._hdfsClient.upload_to_hdfs(trie_local_file_name, trie_remote_hdfs_path)
 
-            self._register_next_target_zookeeper(target_id)
-        except Exception as e:
-            self._logger.error("Error while building tree"+str(e))
+            self._register_trie_zookeeper(target_id, trie_remote_hdfs_path, start, end)
 
-    def _get_trie_remote_hdfs_path(self, target_id):
-        return f'/phrases/3_tries/{target_id}/trie.dat'
+        self._register_next_target_zookeeper(target_id)
 
-    def _create_trie(self, target_id):
+    def _start_end_representation(self, start, end):
+        return f'{start if (start!=min_lexicographic_char) else ""}|{end if (end!=max_lexicographic_char) else ""}'
+
+    def _get_trie_remote_hdfs_path(self, target_id, start, end):
+        return f'/phrases/3_tries/{target_id}/{self._start_end_representation(start, end)}'
+
+    def _create_trie(self, target_id, start, end):
         slidingwindows = self._hdfsClient.list("/phrases/2_targets/" + target_id)
 
         trie = Trie()
@@ -115,15 +123,29 @@ class TrieBuilder:
             for avrofile in self._hdfsClient.list(windowpath):
                 avropath = os.path.join(windowpath, avrofile)
                 with AvroReader(self._hdfsClient._client, avropath) as reader:
+                    schema = reader.writer_schema # The remote file's Avro schema.
+                    content = reader.content # Content metadata (e.g. size).
+                    self._logger.error(f"reader is {str(reader)}")
+
                     for record in reader:
-                        trie.add_phrase(record['phrase'])
+                        phrase = record['phrase']
+                        self._logger.debug("Data is %s" % phrase)
+
+                        if not start<=phrase<end:
+                            continue
+                        trie.add_phrase(phrase)
 
         return trie
 
     def _register_next_target_zookeeper(self, target_id):
-        base_zk_path = ZK_NEXT_TARGET
+        base_zk_path = f'/phrases/distributor/next_target'
         self._zk.ensure_path(f'{base_zk_path}')
         self._zk.set(f'{base_zk_path}', target_id.encode())
+
+    def _register_trie_zookeeper(self, target_id, trie_path, start, end):
+        base_zk_path = f'/phrases/distributor/{target_id}/partitions/{self._start_end_representation(start, end)}'
+        self._zk.ensure_path(f'{base_zk_path}/trie_data_hdfs_path')
+        self._zk.set(f'{base_zk_path}/trie_data_hdfs_path', trie_path.encode())
 
 
 if __name__ == '__main__':
