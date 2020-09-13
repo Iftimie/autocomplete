@@ -9,8 +9,10 @@ import pickle
 from distutils.util import strtobool
 from kazoo.client import KazooClient, DataWatch
 import socket
+import redis
 
 ZK_NEXT_TARGET = '/phrases/distributor/next_target'
+DISTRIBUTED_CACHE_TOP_PHRASES_KEY = 'top-phrases:'
 
 class BackendNodesNotAvailable(Exception):
 	pass
@@ -20,6 +22,8 @@ class Frontend:
 	def __init__(self):
 		self._logger = logging.getLogger('gunicorn.error')
 		self._zk = KazooClient(hosts=f'{os.getenv("ZOOKEEPER_HOST")}:2181')
+		self._distributed_cache = redis.Redis(host=os.getenv("DISTRIBUTED_CACHE_HOST"), port=6379, db=0)
+		self._distributed_cache_enabled = bool(strtobool(os.getenv('DISTRIBUTED_CACHE_ENABLED', 'true')))
 
 	def start(self):
 		self._zk.start()
@@ -29,6 +33,10 @@ class Frontend:
 
 	# Using Cache Aside Pattern
 	def top_phrases_for_prefix(self, prefix):
+		top_phrases_from_distributed_cache = self._top_phrases_for_prefix_distributed_cache(prefix)
+		if (top_phrases_from_distributed_cache is not None):
+			self._logger.debug(f'Got top phrases from distributed cache: {top_phrases_from_distributed_cache}')
+			return top_phrases_from_distributed_cache
 		
 		backend_hostname = self.backend_for_prefix(prefix)
 
@@ -39,8 +47,29 @@ class Frontend:
 		r = requests.get(f'http://{backend_hostname}:6000/top-phrases', params = {'prefix': prefix})
 		self._logger.debug(f'request content: {r.content}; r.json(): {r.json()}')
 		top_phrases = r.json()["data"]["top_phrases"]
+		self._insert_top_phrases_distributed_cache(prefix, top_phrases)
 
 		return top_phrases
+
+	def _top_phrases_for_prefix_distributed_cache(self, prefix):
+		if (not self._distributed_cache_enabled):
+			return None
+
+		key = DISTRIBUTED_CACHE_TOP_PHRASES_KEY + prefix
+		self._logger.debug(f'Attempting to get top phrases from distributed cache with key {key}')
+		if (self._distributed_cache.exists(key)):
+			pickled_list = self._distributed_cache.get(key)
+			return pickle.loads(pickled_list)
+		return None
+
+	def _insert_top_phrases_distributed_cache(self, prefix, top_phrases):
+		if (not self._distributed_cache_enabled):
+			return
+
+		key = DISTRIBUTED_CACHE_TOP_PHRASES_KEY + prefix
+		time_to_expire_s = 30 * 60 # Expire entry after 30 minutes
+		self._logger.debug(f'Inserting top phrases tokey {key}, with top phrases {top_phrases}')
+		self._distributed_cache.set(key, pickle.dumps(top_phrases), ex=time_to_expire_s)
 
 	def backend_for_prefix(self, prefix):
 

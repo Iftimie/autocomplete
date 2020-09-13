@@ -2,3 +2,4 @@ falcon
 gunicorn
 kazoo
 requests
+redis

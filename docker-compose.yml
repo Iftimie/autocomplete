@@ -45,6 +45,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: gunicorn --chdir /app/distributor/backend main:app -b 0.0.0.0:6000 --reload
 
+  distributor.distributed-cache:
+    container_name: distributor.distributed-cache
+    image: redis:6.0.6
+    ports:
+      - "6379:6379"
+
   distributor.frontend:
     build: ./distributor/frontend
     depends_on:
@@ -52,6 +58,7 @@ services:
       - assembler.hadoop.namenode
     environment:
       - ZOOKEEPER_HOST=zookeeper
+      - DISTRIBUTED_CACHE_HOST=distributor.distributed-cache
     ports:
       - "7000"
     volumes:
