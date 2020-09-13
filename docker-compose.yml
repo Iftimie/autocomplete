@@ -8,13 +8,25 @@ services:
       - "80:80"
 
     depends_on:
-      - distributor.backend
+      - distributor.load-balancer
       - assembler.collector
 
     volumes:
       - ./gateway/nginx.conf:/etc/nginx/nginx.conf
       - ./gateway/www:/var/www
       - ./gateway/log:/var/log/nginx
+
+
+  distributor.load-balancer:
+    container_name: distributor.load-balancer
+    image: nginx:1.19-alpine
+    ports:
+      - "8000:8000"
+    depends_on:
+      - distributor.frontend
+    volumes:
+      - ./distributor/load-balancer/nginx.conf:/etc/nginx/nginx.conf
+      - ./distributor/load-balancer/log:/var/log/nginx
 
   distributor.backend:
     build: ./distributor/backend

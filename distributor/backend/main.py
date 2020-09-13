@@ -14,6 +14,7 @@ import socket
 ZK_NEXT_TARGET = '/phrases/distributor/next_target'
 min_lexicographic_char = chr(0)
 max_lexicographic_char = chr(255)
+PARTITIONS = (min_lexicographic_char, 'mod'), ('mod', max_lexicographic_char)
 HOSTNAME = os.environ.get("HOSTNAME")
 NUMBER_NODES_PER_PARTITION = 1
 
@@ -32,7 +33,7 @@ class Backend:
         self._trie = Trie()
         self._zk = KazooClient(hosts=f'{os.getenv("ZOOKEEPER_HOST")}:2181')
         self._hdfsClient = HdfsClient(os.getenv("HADOOP_NAMENODE_HOST"))
-        self.partition_index = self.find_self_partition()
+        self.backend_number = self.find_self_partition() 
 
     def find_self_partition(self):
         cli = Client(base_url='unix://var/run/docker.sock')
@@ -59,12 +60,15 @@ class Backend:
         if (not target_id or self._zk.exists(f'/phrases/distributor/{target_id}') is None):
             return
         partitions = self._zk.get_children(f'/phrases/distributor/{target_id}/partitions')
-        partition = partitions[self.partition_index]
+        partition = partitions[self.backend_number % len(PARTITIONS)]
 
-        node_path = f'/phrases/distributor/{target_id}/partitions/{partition}'
-        self._zk.set(node_path, socket.gethostname().encode())
+        nodes_path = f'/phrases/distributor/{target_id}/partitions/{partition}/nodes/'
+        self._zk.ensure_path(nodes_path)
 
-        trie_data_hdfs_path = f'/phrases/distributor/{target_id}/partitions/{partition}/trie_data_hdfs_path'
+        created_node_path = self._zk.create(nodes_path, value=b'', ephemeral=True, sequence=True)
+        self._zk.set(created_node_path, socket.gethostname().encode())
+
+        trie_data_hdfs_path = f'/phrases/distributor/{target_id}/partitions/{partition}/trie_data_hdfs_path' 
         self._trie = self._load_trie(self._zk.get(trie_data_hdfs_path)[0].decode())
 
     def stop(self):

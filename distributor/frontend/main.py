@@ -8,6 +8,7 @@ import logging
 import pickle
 from distutils.util import strtobool
 from kazoo.client import KazooClient, DataWatch
+import socket
 
 ZK_NEXT_TARGET = '/phrases/distributor/next_target'
 
@@ -55,11 +56,20 @@ class Frontend:
 			start, end = partition.split('|')
 			if ((not start or prefix >= start) and (not end or prefix < end)):
 
-				node_path = f'/phrases/distributor/{target_id}/partitions/{partition}'
+				nodes_path = f'/phrases/distributor/{target_id}/partitions/{partition}/nodes/'
+				nodes = self._zk.get_children(nodes_path)
+				random.shuffle(nodes)
 
-				hostname = self._zk.get(node_path)[0].decode()
+				while nodes:
+					node = nodes.pop()
+					hostname = self._zk.get(f'{nodes_path}/{node}')[0].decode()
+					if not socket.gethostbyname(hostname):
+						self._zk.delete(f'{nodes_path}/{node}')
+					else:
+						return hostname
 
-				return hostname
+				self._logger.warn(f'The partition {partition} does not have any active nodes')
+				return None
 
 		return None
 

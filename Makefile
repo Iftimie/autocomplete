@@ -2,7 +2,7 @@ DOCKER_NETWORK = autocomplete_default
 ENV_FILE = assembler/hadoop/hadoop.env
 
 run:
-	sudo docker-compose up --scale distributor.backend=2
+	sudo docker-compose up --scale distributor.backend=4 --scale distributor.frontend=2
 	# we have only two partitions. we start one distributor.backend for each partition
 
 do_tasks:
